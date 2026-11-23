@@ -85,7 +85,7 @@ npm test        # 设置归一化、掩码、账号池轮换与冷却持久化
 
 `tests/run.mjs` 里的入口 smoke 在没装宿主的检出里会 skip——`@deepseek-ai/*` 解析不到。装进 profile 之后才会真跑。
 
-交 PR 前跑这两条，别让 `lib/client.js` 落后于 `src/client.js`：
+CI（`.github/workflows/ci.yml`）在 Linux/Windows × Node 22/24 上跑同一个脚本，并校验 `lib/client.js` 与 `src/client.js` 同步——改完 `src/client.js` 忘了 `npm run build` 会直接红。本地想先跑一遍：
 
 ```sh
 node tests/run.mjs
