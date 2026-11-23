@@ -2,7 +2,7 @@
   "name": "dsh-connect-MIMOdesktop",
   "displayName": "DSH MiMo Connect",
   "description": "将 MiMo 桌面 App 包含的模型自动接入 DeepSeek Harness，并在设置页提供账号池、模型开关与连通性诊断。复用客户端已登录的额度，无需单独申请 API Key。",
-  "version": "0.4.0",
+  "version": "1.0.0",
   "author": "AURORA-bad (https://github.com/AURORA-bad)",
   "repository": {
     "type": "git",
