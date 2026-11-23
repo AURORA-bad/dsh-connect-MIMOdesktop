@@ -21,6 +21,24 @@ pnpm add link:./dsh-connect-MIMOdesktop
 
 装完重启 DSH。**不要和 `dsh-mimo-connect` 同时启用**：两者都注册 provider `mimo`，会重复。
 
+要求 Node `^22.19.0 || >=24.0.0`。
+
+## 命令行
+
+插件自带一个 CLI，桌面端没登录、或想在不打开 DSH 的情况下排查时用：
+
+```bash
+dsh-connect-MIMOdesktop status [--json]   # 看凭证解析到哪一步，不联网
+dsh-connect-MIMOdesktop login             # 不依赖桌面端，单独登录插件
+dsh-connect-MIMOdesktop logout            # 删除插件自己保存的凭证
+dsh-connect-MIMOdesktop verify            # 建会话并真实调用一次模型
+dsh-connect-MIMOdesktop doctor            # 本地诊断
+```
+
+`login` **不能一键自动登录**：`passToken` 是 HttpOnly，且小米 passport 拒绝第三方回调（`Callback连接不合法`）。所以它给的是逐步指引，需要你手动从浏览器 cookie 面板复制三个值。桌面端已登录时完全不需要它。
+
+凭证来源优先级：插件自己的 `.mimo-connect-auth.json` > 桌面端 cookie（只读复用）。
+
 ## 三处界面
 
 | 位置 | 内容 |
