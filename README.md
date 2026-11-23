@@ -25,8 +25,6 @@ pnpm add link:./dsh-connect-MIMOdesktop
 
 装完重启 DSH。
 
-不要和 `dsh-mimo-connect` 同时启用——两个都注册 `mimo` 这个 provider，会打架。
-
 需要 Node `^22.19.0 || >=24.0.0`。
 
 ## 命令行
