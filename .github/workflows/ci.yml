@@ -1,0 +1,26 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      # Host packages are peer dependencies and only resolve once the plugin is
+      # installed into a DSH profile, so CI runs the two modules that carry
+      # logic; the entry smoke skips itself when the host is absent.
+      - run: node tests/run.mjs
+      - run: node tools/build-client.mjs
+      - run: git diff --exit-code lib/client.js
