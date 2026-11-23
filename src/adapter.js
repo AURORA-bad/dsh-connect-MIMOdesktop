@@ -14,7 +14,7 @@
  * gateway already speaks OpenAI, so models point straight at it and the
  * credential is supplied per request by the session's cookie header.
  *
- * @module dsh-mimo-connect/adapter
+ * @module dsh-connect-mimo/adapter
  */
 
 import { createProvider } from '@earendil-works/pi-ai'
@@ -42,7 +42,7 @@ const INERT_AUTH = {
       return []
     },
     async modify() {
-      throw new Error('dsh-mimo-connect: the mimo route has no pi-ai credential lifecycle')
+      throw new Error('dsh-connect-mimo: the mimo route has no pi-ai credential lifecycle')
     },
     async delete() {},
   },
@@ -189,7 +189,7 @@ class MiMoPiAiAdapter extends PiAiAdapter {
    */
   async listModels(provider) {
     if (provider !== MIMO_PROVIDER) {
-      throw new Error(`dsh-mimo-connect: unknown provider "${provider}"`)
+      throw new Error(`dsh-connect-mimo: unknown provider "${provider}"`)
     }
     return this.#filter().map(entry => ({
       provider,
@@ -281,7 +281,7 @@ export function createMiMoAdapter(options) {
     provider: MIMO_PROVIDER,
     displayName: MIMO_DISPLAY_NAME,
     streamIdleTimeoutMs: MIMO_STREAM_IDLE_TIMEOUT_MS,
-    retryPolicy: resolveRetryPolicy(undefined, 'dsh-mimo-connect retryPolicy'),
+    retryPolicy: resolveRetryPolicy(undefined, 'dsh-connect-mimo retryPolicy'),
     configuredMaxTokens: new Map(),
     modelErrors: new Map(),
     ...REQUEST_IMAGE_BUDGETS,

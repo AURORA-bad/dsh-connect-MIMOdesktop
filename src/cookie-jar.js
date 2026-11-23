@@ -16,7 +16,7 @@
  *   - a leading dot on the domain attribute means the same thing and is
  *     normalized away.
  *
- * @module dsh-mimo-connect/cookie-jar
+ * @module dsh-connect-mimo/cookie-jar
  */
 
 /** A cookie whose value means "drop this cookie". */

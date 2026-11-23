@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `dsh-connect-MIMOdesktop` CLI.
+ * `dsh-connect-mimo` CLI.
  *
  * Subcommands:
  *
@@ -17,7 +17,7 @@
  * path is therefore an explicit, guided copy from the browser's own cookie
  * view — the user is walked through it step by step.
  *
- * @module dsh-connect-MIMOdesktop/bin
+ * @module dsh-connect-mimo/bin
  */
 
 import { createInterface } from 'node:readline/promises'
@@ -30,14 +30,14 @@ const ACCOUNT = 'https://account.xiaomi.com'
 
 /** Print the usage banner. */
 function usage() {
-  console.log(`dsh-connect-MIMOdesktop — 将 Xiaomi MiMo 接入 DeepSeek Harness
+  console.log(`dsh-connect-mimo — 将 Xiaomi MiMo 接入 DeepSeek Harness
 
 用法:
-  dsh-connect-MIMOdesktop status [--json]   显示登录状态
-  dsh-connect-MIMOdesktop login             不使用桌面端，单独登录插件
-  dsh-connect-MIMOdesktop logout            删除插件自己保存的凭证
-  dsh-connect-MIMOdesktop verify            建立会话并真实调用一次模型
-  dsh-connect-MIMOdesktop doctor            本地诊断
+  dsh-connect-mimo status [--json]   显示登录状态
+  dsh-connect-mimo login             不使用桌面端，单独登录插件
+  dsh-connect-mimo logout            删除插件自己保存的凭证
+  dsh-connect-mimo verify            建立会话并真实调用一次模型
+  dsh-connect-mimo doctor            本地诊断
 
 凭证来源优先级:
   1. ${OWN_AUTH_FILENAME}（插件自己的登录）
@@ -284,21 +284,22 @@ async function cmdVerify() {
 
 /** `doctor` subcommand. */
 async function cmdDoctor() {
-  console.log('=== dsh-connect-MIMOdesktop 诊断 ===\n')
+  console.log('=== dsh-connect-mimo 诊断 ===\n')
   const store = new MiMoCredentialStore()
 
+  const diagnosis = store.diagnose()
   console.log('凭证来源:')
-  const own = store.readOwn()
-  console.log(`  插件自身登录: ${own === undefined ? '无' : '有'}`)
-  console.log(`    路径: ${store.ownPath()}`)
-  const desktop = store.readDesktop()
-  console.log(`  桌面端 cookie: ${desktop === undefined ? '无' : '有'}`)
-  if (desktop !== undefined) console.log(`    路径: ${desktop.cookiePath}`)
+  console.log(`  1. 插件自身登录  [${diagnosis.own.state}]`)
+  console.log(`     ${diagnosis.own.path}`)
+  if (diagnosis.own.detail !== '') console.log(`     ${diagnosis.own.detail}`)
 
-  console.log('\n探测过的桌面端路径:')
-  for (const p of store.cookieCandidates()) {
-    const { existsSync } = await import('node:fs')
-    console.log(`  ${existsSync(p) ? '[存在]' : '[无]  '} ${p}`)
+  console.log('  2. 桌面端 cookie（只读复用）')
+  if (diagnosis.desktop.length === 0) {
+    console.log('     [无候选路径] 未找到 MiMo 桌面端的 cookie 数据库')
+  }
+  for (const entry of diagnosis.desktop) {
+    console.log(`     [${entry.state}] ${entry.path}`)
+    if (entry.detail !== '') console.log(`       ${entry.detail}`)
   }
 
   const status = await store.status()

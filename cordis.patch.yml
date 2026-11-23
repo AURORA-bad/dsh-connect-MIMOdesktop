@@ -3,4 +3,4 @@
 # OAuth flow is started.
 - insert:
     - id: llm-mimo
-      name: dsh-connect-MIMOdesktop
+      name: dsh-connect-mimo

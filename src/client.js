@@ -1,5 +1,5 @@
 /**
- * dsh-mimo-connect — browser half.
+ * dsh-connect-mimo — browser half.
  *
  * Three seats, one store of truth (the node half's routes):
  *
@@ -20,11 +20,11 @@
  * shape. The host serves it at `/plugins` from the package's `./client` export,
  * discovered through the `dsh.client` declaration in package.json.
  *
- * @module dsh-connect-MIMOdesktop/client
+ * @module dsh-connect-mimo/client
  */
 
 window.__ModuleLoader__.load({
-  id: 'dsh-connect-MIMOdesktop',
+  id: 'dsh-connect-mimo',
   factory: require => {
     const module = { exports: {} }
     const exports = module.exports
@@ -49,8 +49,8 @@ window.__ModuleLoader__.load({
     const PREFS_POLL_MS = 10 * 1000
 
     /** Id of this plugin's Settings nav row and of the sidebar page. */
-    const SECTION_ID = 'dsh-connect-MIMOdesktop'
-    const PANEL_ID = 'dsh-connect-MIMOdesktop'
+    const SECTION_ID = 'dsh-connect-mimo'
+    const PANEL_ID = 'dsh-connect-mimo'
 
     const NS = 'mimo'
 
@@ -394,7 +394,7 @@ window.__ModuleLoader__.load({
       return h(
         react.Fragment,
         null,
-        h('style', { key: 'css', 'data-plugin-css': 'dsh-connect-MIMOdesktop/QuotaPill.module.css' }, PILL_CSS),
+        h('style', { key: 'css', 'data-plugin-css': 'dsh-connect-mimo/QuotaPill.module.css' }, PILL_CSS),
         h(
           'span',
           {
@@ -561,7 +561,7 @@ window.__ModuleLoader__.load({
       return h(
         react.Fragment,
         null,
-        h('style', { key: 'css', 'data-plugin-css': 'dsh-connect-MIMOdesktop/MimoPage.module.css' }, PAGE_CSS),
+        h('style', { key: 'css', 'data-plugin-css': 'dsh-connect-mimo/MimoPage.module.css' }, PAGE_CSS),
         h(
           'div',
           { className: 'mimos_page', 'data-mimo-page': true },
@@ -852,7 +852,7 @@ window.__ModuleLoader__.load({
      * @param ctx - the client root context.
      */
     function apply(ctx) {
-      ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-connect-MIMOdesktop: dictionaries')
+      ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-connect-mimo: dictionaries')
 
       ctx.inject(['slots', 'modelDirectories'], scope => {
         const models = scope.modelDirectories
@@ -933,7 +933,7 @@ window.__ModuleLoader__.load({
           } catch (error) {
             // A missing icon slot leaves the nav row without a glyph; the page
             // itself still works, so this is never fatal.
-            console.warn('[dsh-connect-MIMOdesktop] settings nav icon failed to register', error)
+            console.warn('[dsh-connect-mimo] settings nav icon failed to register', error)
           }
           return () => {
             for (const dispose of disposers) {
@@ -944,7 +944,7 @@ window.__ModuleLoader__.load({
           }
         })
       } catch (error) {
-        console.error('[dsh-connect-MIMOdesktop] settings section failed to register', error)
+        console.error('[dsh-connect-mimo] settings section failed to register', error)
       }
 
       // The page the sidebar row opens.
@@ -962,7 +962,7 @@ window.__ModuleLoader__.load({
           ),
         )
       } catch (error) {
-        console.error('[dsh-connect-MIMOdesktop] panel page failed to register', error)
+        console.error('[dsh-connect-mimo] panel page failed to register', error)
       }
 
       // The optional sidebar row, gated by `sidebarPanel`.
@@ -991,7 +991,7 @@ window.__ModuleLoader__.load({
             ),
           )
         } catch (error) {
-          console.error('[dsh-connect-MIMOdesktop] sidebar panel row failed to register', error)
+          console.error('[dsh-connect-mimo] sidebar panel row failed to register', error)
         }
       }
 
@@ -1022,7 +1022,7 @@ window.__ModuleLoader__.load({
           }
           panelDisposers = []
         }
-      }, 'dsh-connect-MIMOdesktop: sidebar panel')
+      }, 'dsh-connect-mimo: sidebar panel')
     }
 
     exports.apply = apply

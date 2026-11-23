@@ -7,13 +7,14 @@
  * pool's rotation — plus a smoke import of the plugin entry so a syntax or
  * import-cycle error fails here rather than inside the host.
  *
- * @module dsh-connect-MIMOdesktop/tests
+ * @module dsh-connect-mimo/tests
  */
 
-import { mkdtempSync, rmSync, existsSync, statSync } from 'node:fs'
+import { mkdtempSync, rmSync, existsSync, statSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import assert from 'node:assert/strict'
+import { DatabaseSync } from 'node:sqlite'
 
 import {
   POLL_CHOICES_MS,
@@ -25,6 +26,7 @@ import {
   SETTINGS_DEFAULTS,
 } from '../src/settings.js'
 import { MiMoAccountPool, maskSecret, POOL_FILENAME } from '../src/accounts.js'
+import { diagnoseCookieDatabase } from '../src/credential.js'
 
 let passed = 0
 // Awaited so a rejected assertion surfaces here instead of as an unhandled
@@ -142,6 +144,91 @@ await check('a corrupt roster file is tolerated', async () => {
   })
 } finally {
   rmSync(home, { recursive: true, force: true })
+}
+
+// ---- cooldown persistence ------------------------------------------------
+// A restart used to forget a cooldown and re-hit the account that had just
+// answered 403. The state lives in the roster file now, so a fresh pool over
+// the same path must still see it.
+{
+  const home = mkdtempSync(join(tmpdir(), 'mimo-cool-'))
+  try {
+    const path = join(home, POOL_FILENAME)
+    const first = new MiMoAccountPool({ store: undefined, env: { DSH_HOME: home }, path })
+    const id = first.add({ passToken: 'tok-aaaaaaaaaaaaaaaa', userId: '1' })
+    first.reportFailure(id)
+    assert.equal(first.isCooling(id), true)
+
+    const afterRestart = new MiMoAccountPool({ store: undefined, env: { DSH_HOME: home }, path })
+    await check('a cooldown survives a restart', () => {
+      assert.equal(afterRestart.isCooling(id), true)
+      assert.equal(afterRestart.list()[0].cooling, true)
+    })
+
+    afterRestart.reportSuccess(id)
+    await check('success clears the persisted cooldown', () => {
+      assert.equal(afterRestart.isCooling(id), false)
+      assert.equal(new MiMoAccountPool({ store: undefined, env: { DSH_HOME: home }, path }).isCooling(id), false)
+    })
+
+    const expired = new MiMoAccountPool({ store: undefined, env: { DSH_HOME: home }, path })
+    const stale = JSON.parse(readFileSync(path, 'utf-8'))
+    stale.cooldowns = { [id]: Date.now() - 1000 }
+    writeFileSync(path, JSON.stringify(stale))
+    await check('an expired cooldown is not honoured', () => {
+      assert.equal(expired.isCooling(id), false)
+    })
+  } finally {
+    rmSync(home, { recursive: true, force: true })
+  }
+}
+
+// ---- cookie database diagnosis -------------------------------------------
+// The whole plugin exists to avoid "no credential on this machine", so every
+// dead end must be nameable. Fixtures are real SQLite files, not mocks.
+{
+  const dir = mkdtempSync(join(tmpdir(), 'mimo-ck-'))
+  const makeDb = (name, rows) => {
+    const path = join(dir, name)
+    const db = new DatabaseSync(path)
+    db.exec('CREATE TABLE cookies (host_key TEXT, name TEXT, value TEXT, encrypted_value BLOB)')
+    const insert = db.prepare('INSERT INTO cookies VALUES (?, ?, ?, NULL)')
+    for (const row of rows) insert.run(row.host, row.name, row.value)
+    db.close()
+    return path
+  }
+  try {
+    const good = makeDb('good.db', [
+      { host: '.account.xiaomi.com', name: 'passToken', value: 'pt' },
+      { host: '.account.xiaomi.com', name: 'cUserId', value: 'c' },
+    ])
+    await check('a healthy cookie database is reported as ok', () => {
+      const result = diagnoseCookieDatabase(good)
+      assert.equal(result.state, 'ok')
+      assert.deepEqual(result.passTokenDomains, ['.account.xiaomi.com'])
+    })
+
+    const empty = makeDb('empty.db', [{ host: '.account.xiaomi.com', name: 'passToken', value: '' }])
+    await check('an empty value reads as encrypted-only, not "not logged in"', () => {
+      const result = diagnoseCookieDatabase(empty)
+      assert.equal(result.state, 'encrypted-only')
+      assert.match(result.detail, /加密/)
+    })
+
+    const unrelated = makeDb('unrelated.db', [{ host: '.example.com', name: 'sessionid', value: 'x' }])
+    await check('a database without passport cookies is named as such', () => {
+      assert.equal(diagnoseCookieDatabase(unrelated).state, 'no-pass-token')
+    })
+
+    await check('a missing path is distinguished from an unreadable one', () => {
+      assert.equal(diagnoseCookieDatabase(join(dir, 'nope.db')).state, 'not-found')
+      const notADb = join(dir, 'plain.txt')
+      writeFileSync(notADb, 'not sqlite')
+      assert.equal(diagnoseCookieDatabase(notADb).state, 'unreadable')
+    })
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 // ---- plugin entry --------------------------------------------------------

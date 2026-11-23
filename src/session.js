@@ -21,7 +21,7 @@
  *   - **Every response must be absorbed.** The `deviceId` issued in step 2 is
  *     required by step 3.
  *
- * @module dsh-mimo-connect/session
+ * @module dsh-connect-mimo/session
  */
 
 import { CookieJar, domainMatches } from './cookie-jar.js'

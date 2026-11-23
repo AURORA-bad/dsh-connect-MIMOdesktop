@@ -35,7 +35,7 @@
  * undefined rather than throwing — a quota readout must never be able to break
  * inference or a page render.
  *
- * @module dsh-mimo-connect/quota
+ * @module dsh-connect-mimo/quota
  */
 
 import { MIMO_SERVER } from './session.js'

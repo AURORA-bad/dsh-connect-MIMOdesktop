@@ -7,7 +7,7 @@
  * copy plus the sourcemap reference — the same thing the upstream package ships.
  * A bundler would add a dependency and a config file to do nothing.
  *
- * @module dsh-connect-MIMOdesktop/tools/build-client
+ * @module dsh-connect-mimo/tools/build-client
  */
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
@@ -21,4 +21,4 @@ const target = join(root, 'lib', 'client.js')
 const body = readFileSync(source, 'utf-8')
 mkdirSync(dirname(target), { recursive: true })
 writeFileSync(target, `${body.trimEnd()}\n`)
-console.log(`dsh-connect-MIMOdesktop: wrote ${target}`)
+console.log(`dsh-connect-mimo: wrote ${target}`)

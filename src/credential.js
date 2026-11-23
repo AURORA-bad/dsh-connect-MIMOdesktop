@@ -18,7 +18,7 @@
  * plaintext — Chromium leaves `value` populated and `encrypted_value` empty —
  * so no DPAPI / safeStorage unwrapping is required.
  *
- * @module dsh-mimo-connect/credential
+ * @module dsh-connect-mimo/credential
  */
 
 import {
@@ -115,18 +115,84 @@ export function desktopCookieCandidates(env = process.env) {
  * @returns the rows, or undefined when the file cannot be read as one.
  */
 function readCookieRows(path) {
-  if (!existsSync(path)) return undefined
+  return readCookieRowsDetailed(path).rows
+}
+
+/**
+ * Same read as `readCookieRows`, but says *why* it came back empty.
+ *
+ * "No credential on this machine" is the one failure this plugin exists to
+ * prevent, so every dead end gets a name instead of collapsing into undefined.
+ *
+ * @param path - path to a cookie database.
+ * @returns `{ rows }` on success, `{ reason }` otherwise, where reason is
+ *   `'not-found'`, `'unreadable'` (cannot open read-only) or `'no-table'`
+ *   (opens, but has no cookies table).
+ */
+function readCookieRowsDetailed(path) {
+  if (!existsSync(path)) return { reason: 'not-found' }
+  let db
   try {
-    const db = new DatabaseSync(path, { readOnly: true })
-    try {
-      return db.prepare('SELECT host_key, name, value FROM cookies').all()
-    } finally {
-      db.close()
-    }
+    db = new DatabaseSync(path, { readOnly: true })
   } catch {
-    // Not a database, not a cookie table, or unreadable. The caller decides
-    // whether that is final.
-    return undefined
+    return { reason: 'unreadable' }
+  }
+  try {
+    try {
+      return { rows: db.prepare('SELECT host_key, name, value FROM cookies').all() }
+    } catch {
+      // Opening a non-database file succeeds (SQLite reads lazily) and only
+      // fails here, so the header is what separates "not a cookie DB" from
+      // "cookie DB whose WAL was missed".
+      return { reason: isSqliteFile(path) ? 'no-table' : 'unreadable' }
+    }
+  } finally {
+    try {
+      db.close()
+    } catch {}
+  }
+}
+
+/**
+ * Whether a file starts with the SQLite magic header.
+ *
+ * @param path - file to sniff.
+ * @returns true when it is a SQLite database.
+ */
+function isSqliteFile(path) {
+  try {
+    const handle = readFileSync(path)
+    return handle.subarray(0, 15).toString('latin1') === 'SQLite format 3'
+  } catch {
+    return false
+  }
+}
+
+/**
+ * The column names of the cookies table, or an empty list when unreadable.
+ *
+ * Only used to tell "cookie stored encrypted" apart from "cookie missing" —
+ * Chromium on Windows can move values into `encrypted_value` and leave
+ * `value` empty, which reads as "not logged in" to a value-only reader.
+ *
+ * @param path - path to a cookie database.
+ * @returns the column names.
+ */
+function cookieColumns(path) {
+  let db
+  try {
+    db = new DatabaseSync(path, { readOnly: true })
+  } catch {
+    return []
+  }
+  try {
+    return db.prepare('PRAGMA table_info(cookies)').all().map(column => String(column?.name ?? ''))
+  } catch {
+    return []
+  } finally {
+    try {
+      db.close()
+    } catch {}
   }
 }
 
@@ -195,6 +261,86 @@ export function readDesktopCookies(dbPath, options = {}) {
         unlinkSync(path)
       } catch {}
     }
+  }
+}
+
+/**
+ * Explain what one candidate cookie database yields, without throwing.
+ *
+ * Written for `status` and `doctor`: when the desktop app *is* signed in but
+ * this plugin reports "not signed in", the answer is always one of a handful of
+ * dead ends, and the user cannot tell them apart from the outside.
+ *
+ * @param dbPath - path to the `Cookies` SQLite file.
+ * @returns `{ path, state, detail, cookieCount, passTokenDomains }` where state
+ *   is one of `'ok'`, `'not-found'`, `'unreadable'`, `'no-table'`,
+ *   `'encrypted-only'` or `'no-pass-token'`.
+ */
+export function diagnoseCookieDatabase(dbPath) {
+  const base = { path: dbPath, state: 'ok', detail: '', cookieCount: 0, passTokenDomains: [] }
+  if (!existsSync(dbPath)) {
+    return { ...base, state: 'not-found', detail: '文件不存在（桌面端未安装，或 cookie 目录不同）' }
+  }
+
+  // Read the original first: a scratch copy can open successfully yet miss the
+  // -wal sidecar and report no table, which would mislabel a healthy database.
+  const read = readCookieRowsDetailed(dbPath)
+  if (read.rows === undefined) {
+    if (read.reason === 'no-table') {
+      const columns = cookieColumns(dbPath)
+      const hasCipher = columns.includes('encrypted_value')
+      const hasPlain = columns.includes('value')
+      return {
+        ...base,
+        state: 'no-table',
+        detail:
+          columns.length === 0
+            ? '能打开，但没有 cookies 表（不是 Chromium cookie 库）'
+            : `有 cookies 表但列不符（${columns.join(', ')}）${hasCipher && !hasPlain ? '；值是密文列' : ''}`,
+      }
+    }
+    return {
+      ...base,
+      state: 'unreadable',
+      detail: '无法以只读方式打开（被独占锁定，或不是 SQLite 文件）',
+    }
+  }
+
+  const rows = read.rows
+  const passTokenDomains = []
+  let emptyValues = 0
+  for (const row of rows) {
+    const name = row?.name
+    const host = row?.host_key
+    const value = row?.value
+    if (typeof name !== 'string' || !REQUIRED_COOKIES.includes(name)) continue
+    if (typeof value !== 'string' || value.length === 0) {
+      emptyValues += 1
+      continue
+    }
+    if (typeof host === 'string' && !passTokenDomains.includes(host)) passTokenDomains.push(host)
+  }
+
+  if (passTokenDomains.length === 0) {
+    // Only an empty value is evidence of encryption. The mere presence of an
+    // encrypted_value column proves nothing: Chromium always creates it, and
+    // filling it in only happens once value encryption is switched on.
+    return {
+      ...base,
+      state: emptyValues > 0 ? 'encrypted-only' : 'no-pass-token',
+      detail:
+        emptyValues > 0
+          ? 'passport cookie 存在但值为空（Chromium 已启用值加密），本插件只读明文 value'
+          : '库里没有 passToken / cUserId / userId（桌面端未登录过）',
+      cookieCount: rows.length,
+    }
+  }
+
+  return {
+    ...base,
+    cookieCount: rows.length,
+    passTokenDomains,
+    detail: `命中 ${passTokenDomains.join(', ')}`,
   }
 }
 
@@ -362,11 +508,49 @@ export class MiMoCredentialStore {
     const desktop = this.readDesktop()
     if (desktop !== undefined) return desktop
 
+    const diagnosis = this.diagnose()
+    const trails = [
+      `插件凭证 ${diagnosis.own.path}: ${diagnosis.own.state}${diagnosis.own.detail === '' ? '' : `（${diagnosis.own.detail}）`}`,
+      ...diagnosis.desktop.map(
+        entry => `桌面端 cookie ${entry.path}: ${entry.state}（${entry.detail}）`,
+      ),
+    ]
     throw new Error(
-      'MiMo 尚未登录。请先运行 `dsh plugin --profile <profile> exec dsh-mimo-connect login` ' +
-        '完成一次登录，或在 Xiaomi MiMo 桌面端登录后重试。' +
-        `（已查找：${this.#candidates.join(', ') || '无可用路径'}）`,
+      'MiMo 尚未登录。请先运行 `dsh plugin --profile <profile> exec dsh-connect-mimo login` ' +
+        '完成一次登录，或在 Xiaomi MiMo 桌面端登录后重试。\n' +
+        trails.map(line => `  - ${line}`).join('\n'),
     )
+  }
+
+  /**
+   * Where each credential source stands, in structured form.
+   *
+   * The reason a signed-in desktop app still reads as "not signed in" is always
+   * one of a few dead ends; `status` and `doctor` print these instead of a bare
+   * path list so the user can tell "wrong directory" from "encrypted values".
+   *
+   * @returns `{ own: {path,state,detail}, desktop: object[] }`.
+   */
+  diagnose() {
+    let ownState = 'not-found'
+    let ownDetail = '插件尚未登录（未执行过 login）'
+    if (existsSync(this.#ownPath)) {
+      ownState = 'ok'
+      ownDetail = ''
+      try {
+        if (parseOwnCredential(readFileSync(this.#ownPath, 'utf-8')) === undefined) {
+          ownState = 'unreadable'
+          ownDetail = '文件存在但内容无效（JSON 损坏或字段缺失）'
+        }
+      } catch {
+        ownState = 'unreadable'
+        ownDetail = '文件存在但读取失败'
+      }
+    }
+    return {
+      own: { path: this.#ownPath, state: ownState, detail: ownDetail },
+      desktop: this.#candidates.map(path => diagnoseCookieDatabase(path)),
+    }
   }
 
   /**
@@ -378,7 +562,11 @@ export class MiMoCredentialStore {
     try {
       return { signedIn: true, credential: await this.resolve() }
     } catch (error) {
-      return { signedIn: false, reason: error instanceof Error ? error.message : String(error) }
+      return {
+        signedIn: false,
+        reason: error instanceof Error ? error.message : String(error),
+        diagnosis: this.diagnose(),
+      }
     }
   }
 

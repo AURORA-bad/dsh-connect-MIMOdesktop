@@ -46,7 +46,7 @@
  * cannot serve a DSH turn, so gateway entries that are not chat-shaped are
  * filtered out rather than surfaced as broken choices.
  *
- * @module dsh-mimo-connect/catalog
+ * @module dsh-connect-mimo/catalog
  */
 
 import { MIMO_SERVER } from './session.js'

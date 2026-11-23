@@ -69,11 +69,23 @@ export function maskSecret(value) {
  */
 function readPoolDoc(path) {
   try {
-    if (!existsSync(path)) return { version: POOL_FORMAT_VERSION, accounts: [], pool: [], active: '' }
+    if (!existsSync(path)) {
+      return { version: POOL_FORMAT_VERSION, accounts: [], pool: [], active: '', cooldowns: {} }
+    }
     const parsed = JSON.parse(readFileSync(path, 'utf-8'))
     if (parsed === null || typeof parsed !== 'object') throw new Error('not an object')
     const accounts = Array.isArray(parsed.accounts) ? parsed.accounts : []
     const pool = Array.isArray(parsed.pool) ? parsed.pool.filter(id => typeof id === 'string') : []
+    // Cooldowns are persisted so a restart does not immediately re-hit an
+    // account the gateway just refused. Expired entries are dropped on read:
+    // the file is a hint, and a stale one must not bench a healthy account.
+    const cooldowns = {}
+    const now = Date.now()
+    if (parsed.cooldowns !== null && typeof parsed.cooldowns === 'object') {
+      for (const [id, until] of Object.entries(parsed.cooldowns)) {
+        if (typeof until === 'number' && Number.isFinite(until) && until > now) cooldowns[id] = until
+      }
+    }
     return {
       version: POOL_FORMAT_VERSION,
       accounts: accounts.filter(
@@ -81,9 +93,10 @@ function readPoolDoc(path) {
       ),
       pool,
       active: typeof parsed.active === 'string' ? parsed.active : '',
+      cooldowns,
     }
   } catch {
-    return { version: POOL_FORMAT_VERSION, accounts: [], pool: [], active: '' }
+    return { version: POOL_FORMAT_VERSION, accounts: [], pool: [], active: '', cooldowns: {} }
   }
 }
 
@@ -116,7 +129,6 @@ export class MiMoAccountPool {
   #env
   #path
   #store
-  #cooldowns
 
   /**
    * @param options - the pool's dependencies.
@@ -129,7 +141,6 @@ export class MiMoAccountPool {
     this.#store = options.store
     this.#env = options.env ?? process.env
     this.#path = options.path ?? poolPath(this.#env)
-    this.#cooldowns = new Map()
   }
 
   /** Path of the pool file. */
@@ -152,7 +163,7 @@ export class MiMoAccountPool {
     const doc = this.doc()
     const now = Date.now()
     return doc.accounts.map(account => {
-      const coolingUntil = this.#cooldowns.get(account.id) ?? 0
+      const coolingUntil = doc.cooldowns[account.id] ?? 0
       return {
         id: account.id,
         label: account.label ?? '',
@@ -215,8 +226,8 @@ export class MiMoAccountPool {
     doc.accounts = doc.accounts.filter(a => a.id !== id)
     doc.pool = doc.pool.filter(pid => pid !== id)
     if (doc.active === id) doc.active = doc.pool[0] ?? ''
+    delete doc.cooldowns[id]
     writePoolDoc(this.#path, doc)
-    this.#cooldowns.delete(id)
     return true
   }
 
@@ -246,22 +257,31 @@ export class MiMoAccountPool {
     return doc.pool
   }
 
-  /** Record that the gateway refused an account. */
+  /**
+   * Record that the gateway refused an account.
+   *
+   * Written to disk, not held in memory: a restart used to forget the cooldown
+   * and immediately re-hit the account that had just answered 403.
+   */
   reportFailure(id) {
     if (typeof id !== 'string' || id.length === 0) return
-    this.#cooldowns.set(id, Date.now() + FAILURE_COOLDOWN_MS)
+    const doc = this.doc()
+    doc.cooldowns[id] = Date.now() + FAILURE_COOLDOWN_MS
+    writePoolDoc(this.#path, doc)
   }
 
   /** Record that an account answered, clearing any cooldown. */
   reportSuccess(id) {
     if (typeof id !== 'string') return
-    this.#cooldowns.delete(id)
+    const doc = this.doc()
+    if (doc.cooldowns[id] === undefined) return
+    delete doc.cooldowns[id]
+    writePoolDoc(this.#path, doc)
   }
 
   /** Whether an account is currently cooling down. */
   isCooling(id) {
-    const until = this.#cooldowns.get(id) ?? 0
-    return until > Date.now()
+    return (this.doc().cooldowns[id] ?? 0) > Date.now()
   }
 
   /**

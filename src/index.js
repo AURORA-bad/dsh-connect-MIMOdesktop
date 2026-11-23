@@ -13,7 +13,7 @@
  *
  * There is no background service, no autostart entry, and no local proxy.
  *
- * @module dsh-mimo-connect
+ * @module dsh-connect-mimo
  */
 
 import Schema from '@deepseek-ai/schemastery'
@@ -282,7 +282,7 @@ export function apply(ctx, config) {
       await session.ensureSession()
     } catch (error) {
       ctx.logger.warn(
-        'dsh-mimo-connect: 会话建立失败，将在下次请求时重试',
+        'dsh-connect-mimo: 会话建立失败，将在下次请求时重试',
         error instanceof Error ? error.message : String(error),
       )
       return
@@ -301,7 +301,7 @@ export function apply(ctx, config) {
       }
     } catch (error) {
       ctx.logger.warn(
-        'dsh-mimo-connect: 模型清单刷新失败，继续使用内置清单',
+        'dsh-connect-mimo: 模型清单刷新失败，继续使用内置清单',
         error instanceof Error ? error.message : String(error),
       )
     }
@@ -312,7 +312,7 @@ export function apply(ctx, config) {
     if (!settings.providerEnabled) {
       // Switched off in the settings page: no provider, no polling, no network.
       // The routes stay mounted so the page can switch it back on.
-      ctx.logger.info('dsh-mimo-connect: provider disabled in settings')
+      ctx.logger.info('dsh-connect-mimo: provider disabled in settings')
       return
     }
     let registrationError
@@ -326,7 +326,7 @@ export function apply(ctx, config) {
       })
     } catch (error) {
       registrationError = error instanceof Error ? error.message : String(error)
-      ctx.logger.error('dsh-mimo-connect: provider registration failed', error)
+      ctx.logger.error('dsh-connect-mimo: provider registration failed', error)
     }
 
     if (!registered) return
@@ -563,7 +563,7 @@ export function apply(ctx, config) {
                 : { cookiePath: status.credential.cookiePath }),
             },
           }
-        : { reason: status.reason }),
+        : { reason: status.reason, diagnosis: status.diagnosis }),
       registered,
       session: session.describe(),
       catalog: {
@@ -593,7 +593,7 @@ export function apply(ctx, config) {
     ctx.accessor('mimoStatus', { get: () => statusDocument })
   } catch (error) {
     // Never let a diagnostics surface break plugin loading.
-    ctx.logger.warn('dsh-mimo-connect: could not expose the mimoStatus accessor', error)
+    ctx.logger.warn('dsh-connect-mimo: could not expose the mimoStatus accessor', error)
   }
 }
 
