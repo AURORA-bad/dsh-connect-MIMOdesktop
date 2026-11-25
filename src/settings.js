@@ -6,7 +6,7 @@
  * the knobs the reference plugin has that still mean something without that
  * data.
  *
- * @module dsh-connect-MIMOdesktop/settings
+ * @module dsh-connect-mimo/settings
  */
 
 /** Refresh-cadence choices offered by the settings page, in milliseconds. */

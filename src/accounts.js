@@ -18,7 +18,7 @@
  *     file or the desktop app) is used, so an existing install keeps working
  *     untouched.
  *
- * @module dsh-connect-MIMOdesktop/accounts
+ * @module dsh-connect-mimo/accounts
  */
 
 import {
